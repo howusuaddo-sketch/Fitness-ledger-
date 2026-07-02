@@ -612,6 +612,7 @@
   <div id="workoutPresetList"></div>
 
   <button class="save-btn" id="saveSettings">Save settings</button>
+  <button class="save-btn secondary" id="resetXpBtn">Reset XP & Level</button>
   <div class="tip">Tip: tap the Share icon in Safari → "Add to Home Screen" to use Ledger like an app, full screen with its own icon.<br>Recheck your targets every 4–6 weeks as your weight changes.</div>
 </div>
 
@@ -822,7 +823,7 @@
   async function addXP(amount, opts){
     opts = opts || {};
     const before = levelFor(gamify.xp);
-    gamify.xp += amount;
+    gamify.xp = Math.max(0, gamify.xp + amount);
     const after = levelFor(gamify.xp);
     renderXP();
     await saveGamify();
@@ -1214,10 +1215,25 @@
   }
 
   async function deleteEntry(kind, id){
+    const existed = dayData[kind].some(e=>e.id===id);
     dayData[kind] = dayData[kind].filter(e=>e.id!==id);
     await saveDay();
     renderDay();
     renderStreak();
+
+    if(existed){
+      if(kind==='food'){
+        gamify.stats.totalMeals = Math.max(0, gamify.stats.totalMeals - 1);
+        await addXP(-10, {silent:true});
+        showToast('Removed — 10 XP undone');
+      } else {
+        gamify.stats.totalSessions = Math.max(0, gamify.stats.totalSessions - 1);
+        await addXP(-30, {silent:true});
+        showToast('Removed — 30 XP undone');
+      }
+      await saveGamify();
+      if(activeTab==='home') renderHome();
+    }
   }
 
   function openSettings(){
@@ -1340,7 +1356,10 @@
             celebrate(`✅<span class="big">Checklist complete!</span>Now log the session below`);
           }
         }
-        else { list = list.filter(x=>x!==id); }
+        else {
+          list = list.filter(x=>x!==id);
+          await addXP(-5, {silent:true});
+        }
         await storeSet(checkKey, list);
         renderWorkoutPlan();
       });
@@ -1512,6 +1531,19 @@
       renderDay();
       closeSettings();
       showToast('Settings saved');
+    });
+
+    $('resetXpBtn').addEventListener('click', async ()=>{
+      const ok = window.confirm('Reset XP, level and progress stats back to zero?\n\nThis will NOT delete your logged food, workouts, badges, or weight history — just the XP/level counters.');
+      if(!ok) return;
+      gamify.xp = 0;
+      gamify.stats = { totalMeals:0, totalSessions:0, proteinHits:0 };
+      gamify.lastProteinBonusDate = null;
+      await saveGamify();
+      renderXP();
+      closeSettings();
+      showToast('XP and level reset');
+      if(activeTab==='home') renderHome();
     });
 
     $('saveProgress').addEventListener('click', saveProgressEntry);
