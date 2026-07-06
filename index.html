@@ -286,6 +286,19 @@
   .checklist-item.checked .clabel{color:var(--ink-soft); text-decoration:line-through;}
   .checklist-item .ctime{font-size:11.5px; color:var(--ink-soft); font-family:'JetBrains Mono'; margin-top:1px;}
   .plan-progress{font-size:12px; color:var(--ink-soft); margin:2px 0 14px;}
+
+  .altw-row{
+    display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:12px 14px; margin-bottom:8px; box-shadow:var(--shadow);
+  }
+  .altw-body{flex:1; min-width:0;}
+  .altw-name{font-weight:600; font-size:14.5px;}
+  .altw-detail{font-size:12px; color:var(--ink-soft); margin-top:2px; font-family:'JetBrains Mono';}
+  .altw-log{
+    background:var(--blue); color:#0A0B0D; border:none; border-radius:9px; padding:9px 16px;
+    font-size:13px; font-weight:700; cursor:pointer; flex-shrink:0; transition:transform .12s ease;
+  }
+  .altw-log:active{transform:scale(.93);}
   .checklist-item input[type=checkbox]{transition:transform .15s ease;}
   .checklist-item.checked input[type=checkbox]{transform:scale(1.15);}
 
@@ -592,6 +605,12 @@
       <div id="checklistItems"></div>
       <button class="save-btn" id="logSession">Log session to Ledger</button>
     </div>
+
+    <button class="save-btn secondary" id="toggleAltWorkouts">Need to switch it up? Pick a different workout ▾</button>
+    <div id="altWorkoutsSection" style="display:none;">
+      <div class="tip" style="margin:14px 0 4px;">Life happens — log whatever you actually did instead, and it still counts toward your streak and XP.</div>
+      <div id="altWorkoutsList"></div>
+    </div>
   </section>
 
   <!-- RECIPES VIEW -->
@@ -822,6 +841,33 @@
       {id:'sun-stretch', label:'Stretch & mobility', mins:10},
     ]},
   };
+
+  // Swap-in library, grouped the way Ultrahuman classifies activity: strength, high-intensity, endurance, low-intensity
+  const ALT_WORKOUTS = [
+    {id:'alt-fullbody', category:'Strength', name:'Full-Body Strength', detail:'Dumbbells, bench & bands', mins:'30–45 min'},
+    {id:'alt-upper', category:'Strength', name:'Upper Body Strength', detail:'Bench press, rows, shoulder press', mins:'25–30 min'},
+    {id:'alt-lower', category:'Strength', name:'Lower Body Strength', detail:'Squats, step-ups, split squats', mins:'30–40 min'},
+    {id:'alt-core', category:'Strength', name:'Core & Abs Circuit', detail:'Plank, dead bug, side plank', mins:'15–20 min'},
+    {id:'alt-bodyweight', category:'Strength', name:'Bodyweight Circuit', detail:'No equipment needed — anywhere', mins:'20–30 min'},
+
+    {id:'alt-boxing', category:'High-Intensity', name:'Boxing (Bag & Pads)', detail:'Gloves + pads', mins:'25–30 min'},
+    {id:'alt-skipping', category:'High-Intensity', name:'Skipping Rope HIIT', detail:'Interval rounds', mins:'15–20 min'},
+    {id:'alt-tabata', category:'High-Intensity', name:'Tabata Circuit', detail:'20s on / 10s off intervals', mins:'20 min'},
+    {id:'alt-trampoline', category:'High-Intensity', name:'Trampoline Cardio Burst', detail:'Mini trampoline', mins:'15 min'},
+    {id:'alt-stepper', category:'High-Intensity', name:'Stepper Intervals', detail:'Fast/slow interval climbs', mins:'20 min'},
+
+    {id:'alt-bike', category:'Endurance', name:'Bike Ride', detail:'Steady pace, indoor or outdoor', mins:'30–60 min'},
+    {id:'alt-treadmill', category:'Endurance', name:'Treadmill Run/Jog', detail:'Steady or interval pace', mins:'20–40 min'},
+    {id:'alt-outdoorrun', category:'Endurance', name:'Outdoor Run', detail:'Steady pace', mins:'20–40 min'},
+    {id:'alt-swim', category:'Endurance', name:'Swimming', detail:'Pool laps', mins:'30 min'},
+    {id:'alt-hike', category:'Endurance', name:'Hiking', detail:'Trail or countryside walk', mins:'45–90 min'},
+
+    {id:'alt-walk', category:'Low-Intensity', name:'Steady Walk', detail:'Flat pace, outdoors or treadmill', mins:'30–45 min'},
+    {id:'alt-yoga', category:'Low-Intensity', name:'Yoga', detail:'Flow or restorative', mins:'20–30 min'},
+    {id:'alt-mobility', category:'Low-Intensity', name:'Stretch & Mobility', detail:'Full-body loosen up', mins:'10–15 min'},
+    {id:'alt-dance', category:'Low-Intensity', name:'Dance / Cardio Class', detail:'Any style', mins:'30–45 min'},
+    {id:'alt-sport', category:'Low-Intensity', name:'Sport / Match', detail:'Football, basketball, tennis, etc.', mins:'45–60 min'},
+  ];
 
   const RECIPES = [
     // Breakfast
@@ -1663,6 +1709,41 @@
     await awardSessionXP();
   }
 
+  async function logAltWorkout(altId){
+    const w = ALT_WORKOUTS.find(x=>x.id===altId);
+    if(!w) return;
+    const id = 'e' + Date.now() + Math.random().toString(36).slice(2,6);
+    dayData.workout.push({ id, time:new Date().toISOString(), name:w.name, detail: `${w.detail} · ${w.mins}` });
+    await saveDay();
+    renderDay();
+    renderStreak();
+    renderWorkoutPlan();
+    await awardSessionXP();
+  }
+
+  function renderAltWorkouts(){
+    const categories = ['Strength','High-Intensity','Endurance','Low-Intensity'];
+    let html = '';
+    categories.forEach(cat=>{
+      const items = ALT_WORKOUTS.filter(w=>w.category===cat);
+      if(items.length===0) return;
+      html += `<div class="section-title">${cat}</div>`;
+      html += items.map(w=>`
+        <div class="altw-row">
+          <div class="altw-body">
+            <div class="altw-name">${escapeHtml(w.name)}</div>
+            <div class="altw-detail">${escapeHtml(w.detail)} · ${escapeHtml(w.mins)}</div>
+          </div>
+          <button class="altw-log" data-altlog="${w.id}">Log</button>
+        </div>
+      `).join('');
+    });
+    $('altWorkoutsList').innerHTML = html;
+    document.querySelectorAll('[data-altlog]').forEach(btn=>{
+      btn.addEventListener('click', ()=> logAltWorkout(btn.dataset.altlog));
+    });
+  }
+
 
   async function loadProgress(){
     progressEntries = await storeGet('progress', []);
@@ -1775,6 +1856,7 @@
     await loadDay(currentDate);
     await renderStreak();
     renderRecipes();
+    renderAltWorkouts();
     setAddType('food');
     setTab('home');
     await renderHome(); // ensure month stats are fully populated before we ever reveal the shell
@@ -1857,6 +1939,15 @@
 
     $('saveProgress').addEventListener('click', saveProgressEntry);
     $('logSession').addEventListener('click', logSessionToLedger);
+
+    $('toggleAltWorkouts').addEventListener('click', ()=>{
+      const section = $('altWorkoutsSection');
+      const isHidden = section.style.display === 'none';
+      section.style.display = isHidden ? 'block' : 'none';
+      $('toggleAltWorkouts').textContent = isHidden
+        ? 'Need to switch it up? Pick a different workout ▴'
+        : 'Need to switch it up? Pick a different workout ▾';
+    });
 
     $('biClose').addEventListener('click', hideBadgeInfo);
     $('badgeInfoOverlay').addEventListener('click', hideBadgeInfo);
